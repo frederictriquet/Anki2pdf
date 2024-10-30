@@ -1,5 +1,5 @@
 import zstandard as zstd
-import zipfile, sqlite3, os, re, sys
+import zipfile, sqlite3, os, re, sys, argparse
 import tempfile
 from xhtml2pdf import pisa
 
@@ -48,37 +48,58 @@ def unpack_medias(directory_src, directory_dst, media_path):
     for i,f in enumerate(enumerate_medias(media_path)):
         unpack(f'{directory_src}/{i}',f'{directory_dst}/{f}')
 
-title = sys.argv[1]
-apkg = sys.argv[2]
-with tempfile.TemporaryDirectory() as tmpdirname:
-    archive_name=apkg
-    db_file=f'{tmpdirname}/_collection.anki21b'
-    htmldir=f'{tmpdirname}/HTML'
-
+def extract_all(archive_name, dest_dir_name, htmldir):
     with zipfile.ZipFile(f'{archive_name}', 'r') as zip_ref:
-        zip_ref.extractall(f'{tmpdirname}/')
+        zip_ref.extractall(f'{dest_dir_name}/')
 
-    unpack(f'{tmpdirname}/media', f'{tmpdirname}/_media')
+    unpack(f'{dest_dir_name}/media', f'{dest_dir_name}/_media')
+    unpack(f'{dest_dir_name}/collection.anki21b', f'{dest_dir_name}/_collection.anki21b')
+    os.makedirs(htmldir, exist_ok=True)
+    unpack_medias(f'{dest_dir_name}', htmldir, f'{dest_dir_name}/_media')
 
-    os.mkdir(htmldir)
-    unpack_medias(f'{tmpdirname}', htmldir, f'{tmpdirname}/_media')
-    unpack(f'{tmpdirname}/collection.anki21b',db_file)
-
-    connection = sqlite3.connect(db_file)
+def db2html(db_filename, htmldir, title):
+    connection = sqlite3.connect(db_filename)
     cursor = connection.cursor()
     cursor.execute("SELECT flds FROM notes")
-
     rows = cursor.fetchall()
     with open(f'{htmldir}/index.html', 'w') as html_file:
         html_file.write(f'<h1>{title}</h1>')
         for row in rows:
             content = row[0]
-            content = re.sub(r'\{\{c1::([^\}]*)\}\}', '<span style="color:blue">\\1</span>', content)
-            content = re.sub(r'\{\{c2::([^\}]*)\}\}', '<span>\\1</span>', content)
+            # content = re.sub(r'\{\{c1::([^\}]*)\}\}', 'START<span style="color:blue">\\1</span>END', content, flags=re.MULTILINE)
+            content = re.sub(r'\{\{c1::([^\}]*)\}\}', '<span style="color:blue">\\1</span>', content, flags=re.MULTILINE)
+            content = re.sub(r'\{\{c2::([^\}]*)\}\}', '<span>\\1</span>', content, flags=re.MULTILINE)
             html_file.write(f'<hr>{content}')
+            html_file.write(f'</span></span></span>')
+
+def html2pdf(htmldir, pdf_filename):
     cwd = os.getcwd()
     os.chdir(htmldir)
     with open('index.html','r') as htmlfile:
         html = htmlfile.read()
-        pdf_path = f"{cwd}/{title}.pdf"
-        convert_html_to_pdf(html, pdf_path)
+        convert_html_to_pdf(html, pdf_filename)
+        print(pdf_filename)
+    os.chdir(cwd)
+
+def process_all(apkg_filename:str, title:str):
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        archive_name=apkg_filename
+        htmldir=f'{tmpdirname}/HTML'
+        # htmldir=f'./HTML'
+
+        extract_all(archive_name, tmpdirname, htmldir)
+        db2html(f'{tmpdirname}/_collection.anki21b', htmldir, title)
+
+        pdf_filename = f'{os.getcwd()}/{title}.pdf'
+        html2pdf(htmldir, pdf_filename)
+
+def main():
+    parser = argparse.ArgumentParser(
+                    prog='anky2pdf',
+                    description='Convertit un export Anki vers un fichier PDF',
+                    epilog='.')
+    parser.add_argument('title')
+    parser.add_argument('filename')
+    args = parser.parse_args()
+    process_all(args.filename, args.title)
+main()

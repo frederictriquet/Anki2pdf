@@ -1,0 +1,4 @@
+zstandard
+sqlite3
+
+xhtml2pdf

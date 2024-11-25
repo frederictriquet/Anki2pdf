@@ -2,11 +2,12 @@ import zstandard as zstd
 import zipfile, sqlite3, os, re, sys, argparse
 import tempfile
 from xhtml2pdf import pisa
+from weasyprint import HTML, CSS
 
 def convert_html_to_pdf(html_string, pdf_path):
-  with open(pdf_path, "wb") as pdf_file:
-    pisa_status = pisa.CreatePDF(html_string, dest=pdf_file)
-  return not pisa_status.err
+    with open(pdf_path, "wb") as pdf_file:
+        pisa_status = pisa.CreatePDF(html_string, dest=pdf_file)
+    return not pisa_status.err
 
 def unpack(input_path, output_path):
     dctx = zstd.ZstdDecompressor()
@@ -63,7 +64,7 @@ def db2html(db_filename, htmldir, title):
     cursor.execute("SELECT flds FROM notes")
     rows = cursor.fetchall()
     with open(f'{htmldir}/index.html', 'w') as html_file:
-        html_file.write(f'<h1>{title}</h1>')
+        html_file.write(f'<!DOCTYPE html><head><meta charset="utf-8"></head><body><h1>{title}</h1>')
         for row in rows:
             content = row[0]
             # content = re.sub(r'\{\{c1::([^\}]*)\}\}', 'START<span style="color:blue">\\1</span>END', content, flags=re.MULTILINE)
@@ -75,14 +76,20 @@ def db2html(db_filename, htmldir, title):
 def html2pdf(htmldir, pdf_filename):
     cwd = os.getcwd()
     os.chdir(htmldir)
-    with open('index.html','r') as htmlfile:
-        html = htmlfile.read()
-        convert_html_to_pdf(html, pdf_filename)
-        print(pdf_filename)
+    # css = CSS(string='img{    width:100%;    max-width:600px;}')
+    css = CSS(string='img{     max-width:90%;}')
+    html = HTML('index.html')
+    html.write_pdf(pdf_filename, stylesheets= [css])
+
+    # with open('index.html','r') as htmlfile:
+    #     html = htmlfile.read()
+    #     convert_html_to_pdf(html, pdf_filename+'_')
+    #     print(pdf_filename)
     os.chdir(cwd)
 
 def process_all(apkg_filename:str, title:str):
-    with tempfile.TemporaryDirectory() as tmpdirname:
+    with tempfile.TemporaryDirectory(dir='.', delete=True) as tmpdirname:
+        print(tmpdirname)
         archive_name=apkg_filename
         htmldir=f'{tmpdirname}/HTML'
         # htmldir=f'./HTML'

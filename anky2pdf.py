@@ -79,7 +79,7 @@ def html2pdf(htmldir, pdf_filename):
     # css = CSS(string='img{    width:100%;    max-width:600px;}')
     css = CSS(string='img{     max-width:90%;}')
     html = HTML('index.html')
-    html.write_pdf(pdf_filename, stylesheets= [css])
+    html.write_pdf(pdf_filename, stylesheets= [css], presentational_hints=True)
 
     # with open('index.html','r') as htmlfile:
     #     html = htmlfile.read()
